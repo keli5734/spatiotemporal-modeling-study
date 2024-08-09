@@ -5,7 +5,7 @@ date: "2024-08-09"
 output: html_document
 ---
  
-```{r setup, include=FALSE}
+```{r setup, include=FALSE, warning=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(arrow)
 library(tidyr)
@@ -22,10 +22,10 @@ vircol <-  viridis_pal()(100)
 library(duckdb)
 library(plotly)
 library(lubridate)
-source('./R/plot.fun.R')
-source('./R/schema.R')
+# source('./R/plot.fun.R')
+# source('./R/schema.R')
 state_cw <- read.csv('./Data/SSA_state_crosswalk.csv')
-#state_cw <- statepop %>% select(fips, abbr)
+# state_cw <- statepop %>% select(fips, abbr)
 state.info <- cbind.data.frame(state.name, state.abb, state.region)
 
 ```
@@ -36,10 +36,22 @@ Try to analyze trends by facility; try to pull out Med/Surg separately
 ## Read in the parquet database
 
 ```{r} 
-pq_stream_sid <- open_dataset("R:/ParquetData/AZ", format = "parquet")#%>% 
-  #dplyr::select(starts_with('I10_DX'), KEY,AMONTH, YEAR,ZIP, AGE,ATYPE,LOS,ZIPINC_QRTL,MRN_R) 
+  pq_stream_sid <- open_dataset("/Volumes/Home/HCUPdata-CC0941-MEDSPH/ParquetData/NY", format = "parquet")
 
-pq_stream_sid_ch <- open_dataset("R:/ParquetData/AZ_chgs", format = "parquet") %>%
+ds1 <- pq_stream_sid %>% 
+  dplyr::select("ICD-10-CM Admitting Diagnosis Code") %>%
+  collect()
+
+ds1 <- pq_stream_sid %>% 
+  rename(AGE="Age in years at admission" ) %>%
+  dplyr::select(AGE) %>%
+  group_by(AGE) %>%
+  summarize(N=n())%>%
+  collect()
+  
+  dplyr::select(starts_with('I10_DX'), KEY,AMONTH, YEAR,ZIP, AGE,ATYPE,LOS,ZIPINC_QRTL,MRN_R) 
+
+pq_stream_sid_ch <- open_dataset("/Volumes/Home/HCUPdata-CC0941-MEDSPH/ParquetData/NY_chgs", format = "parquet") %>%
    mutate(icu = if_else(is.na(`Detailed charges 10 (as received from source)`),0,1),
          obs_rm = if_else(is.na(`Detailed charges 51 (as received from source)`),0,1),
          med_surg = if_else(is.na(`Detailed charges 17 (as received from source)`),0,1)
@@ -47,7 +59,7 @@ pq_stream_sid_ch <- open_dataset("R:/ParquetData/AZ_chgs", format = "parquet") %
     rename(KEY= `HCUP record identifier`) %>%
   dplyr::select(icu, obs_rm, med_surg, KEY) 
 
-pq_stream_sid_fl <- open_dataset("R:/ParquetData/FL", format = "parquet")
+pq_stream_sid_fl <- open_dataset("/Volumes/Home/HCUPdata-CC0941-MEDSPH/ParquetData/ParquetData/FL", format = "parquet")
 
 #96% of all hosp are floridians
 # pq_stream_sid_fl %>%
