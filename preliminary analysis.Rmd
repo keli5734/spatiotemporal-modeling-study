@@ -6,7 +6,7 @@ output: html_document
 ---
  
 ```{r setup, include=FALSE, warning=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_chunk$set(echo = TRUE)
 library(arrow)
 library(tidyr)
 library(dplyr)
@@ -36,10 +36,10 @@ Try to analyze trends by facility; try to pull out Med/Surg separately
 ## Read in the parquet database
 
 ```{r} 
-  pq_stream_sid <- open_dataset("/Volumes/Home/HCUPdata-CC0941-MEDSPH/ParquetData/NY", format = "parquet")
+pq_stream_sid <- open_dataset("/Volumes/HCUPdata-CC0941-MEDSPH/ParquetData/NY_SEDD", format = "parquet")
 
 ds1 <- pq_stream_sid %>% 
-  dplyr::select("ICD-10-CM Admitting Diagnosis Code") %>%
+  dplyr::select("I10_DX2") %>%
   collect()
 
 ds1 <- pq_stream_sid %>% 
@@ -358,7 +358,7 @@ test1 <- inp1 %>%
   mutate(agey=as.numeric(agey),
          agec= if_else(agey<5, 1,
                   if_else(agey>=5 & agey<18,2,
-                 if_else(agey>=18 & agey<40,3,
+                  if_else(agey>=18 & agey<40,3,
                   if_else(agey>40 & agey<65,4,
                   if_else(agey>=65 & agey<110,5, NA_real_
                   )))))
@@ -614,7 +614,7 @@ inp_ny <- pq_stream_sid_ny %>%
                             I10_DX25)
                   )%>%
    filter(grepl("B974|J121|J205|J210", all_dx)) %>%
-    dplyr::select(AGE,  AYEAR, AMONTH,ZIP, ZIP3,ZIPINC_QRTL,all_dx) %>%
+   dplyr::select(AGE,  AYEAR, AMONTH,ZIP, ZIP3,ZIPINC_QRTL,all_dx) %>%
   collect()
 
 saveRDS(inp_ny,'R:/ParquetData/ny_inp_rsv.RDS')
@@ -622,32 +622,71 @@ saveRDS(inp_ny,'R:/ParquetData/ny_inp_rsv.RDS')
 
 
 ```{r}
-inp_ny <- readRDS('R:/ParquetData/ny_inp_rsv.RDS')
-ed_ny <- readRDS('R:/ParquetData/ny_ed_rsv.RDS') %>%
+library(lubridate)
+
+inp_ny <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/ParquetData/ny_inp_rsv.RDS")
+ 
+inp_ny <- inp_ny %>%  
+  filter(!is.na(AYEAR)) %>% 
+  filter(!is.na(AMONTH)) %>% 
+  mutate(date = paste0(AYEAR,"/",AMONTH,"/","01")) %>% 
+  mutate(date = ymd(date)) %>% 
+  mutate(AGE = as.numeric(AGE)) %>% 
+  mutate(AGE_GROUP = if_else(AGE >=0 & AGE < 5, "0-5", 
+                             if_else(AGE >=5 & AGE < 19, "5-19",
+                                     if_else(AGE >= 19 & AGE <39, "19-39", 
+                                             ifelse(AGE >= 39 & AGE < 59, "39-59", "60+")))))
+inp_ny %>% 
+  group_by(date, AGE_GROUP) %>% 
+  summarise(N = n()) %>% 
+  ggplot() + 
+  geom_line(aes(x = date, y = N, group = AGE_GROUP, color = AGE_GROUP)) 
+  
+
+ed_ny <- readRDS('/Volumes/HCUPdata-CC0941-MEDSPH/ParquetData/ny_ed_rsv.RDS') %>%
   mutate(AYEAR=as.numeric(AYEAR))
 
-all_data <- bind_rows(inp_ny, ed_ny) %>%
-  group_by(ZIP) %>%
-  summarize(N=n())
+
+ed_ny <- ed_ny %>%  
+  filter(!is.na(AYEAR)) %>% 
+  filter(!is.na(AMONTH)) %>% 
+  mutate(date = paste0(AYEAR,"/",AMONTH,"/","01")) %>% 
+  mutate(date = ymd(date)) %>% 
+  mutate(AGE = as.numeric(AGE)) %>% 
+  mutate(AGE_GROUP = if_else(AGE >=0 & AGE < 5, "0-5", 
+                             if_else(AGE >=5 & AGE < 19, "5-19",
+                                     if_else(AGE >= 19 & AGE <39, "19-39", 
+                                             ifelse(AGE >= 39 & AGE < 59, "39-59", "60+")))))
+
+ed_ny %>% 
+  group_by(date, AGE_GROUP) %>% 
+  summarise(N = n()) %>% 
+  ggplot() + 
+  geom_line(aes(x = date, y = N, group = AGE_GROUP, color = AGE_GROUP)) 
 
 
+
+
+# all_data <- bind_rows(inp_ny, ed_ny) %>%
+#   group_by(ZIP) %>%
+#   summarize(N=n())
 ```
 
 Popsize data 
 
 ```{r}
-#library(tidycensus)
+library(tidycensus)
 # You'll need a Census API key. Get one at http://api.census.gov/data/key_signup.html
 # Set your API key:
-# census_api_key("KEY HERE", install=T)
+census_api_key("54a1f67a8ece8505154628934ac7b50b074a45a1", install=T)
 # Get population data for ZCTAs in New York
-# zcta_pop <- get_acs(
-#   geography = "zcta",
-#   variables = "B01003_001", # Total population
-#   state = "NY",
-#   year = 2019  # You can change the year as needed
-# )
-# saveRDS(zcta_pop,'./Data/NY_pop2019.rds')
+zcta_pop <- get_acs(
+  geography = "zcta",
+  variables = "B01003_001", # Total population
+  state = "NY",
+  year = 2019  # You can change the year as needed
+)
+#saveRDS(zcta_pop,'/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS')
 ```
 
 ```{r}
@@ -669,7 +708,7 @@ nyc_zips <- c(
 )
 
 
-zcta_pop <- readRDS('NY_pop2019.rds') %>%
+zcta_pop <- readRDS('/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS') %>%
   select(GEOID, population = estimate) %>%
   rename(ZCTA5CE10 = GEOID)
 
@@ -682,18 +721,18 @@ nyc_map_data <- nyc_zips_sf %>%
     left_join(zcta_pop, by = "ZCTA5CE10")
 
 
-ggplot(data = nyc_map_data) +
-  geom_sf(aes(fill = N/population*100000)) +
-  scale_fill_viridis_c(name = "Value") +
-  theme_minimal() +
-  labs(title = "New York City ZIP Code Choropleth Map")
+# ggplot(data = nyc_map_data) +
+#   geom_sf(aes(fill = N/population*100000)) +
+#   scale_fill_viridis_c(name = "Value") +
+#   theme_minimal() +
+#   labs(title = "New York City ZIP Code Choropleth Map")
 
 
 p1a <- nyc_map_data%>%
-  mutate(   inc=N/population*100000) %>%
+  mutate(inc=N/population*100000) %>% # calculate the incidence ...
   filter(!is.na(inc) & population!=0) 
 
-  p1a$cuts = as.integer(cut(ewcdf(p1a$inc, weights=p1a$population)(p1a$inc), seq(0,1,.01))
+p1a$cuts = as.integer(cut(ewcdf(p1a$inc, weights=p1a$population)(p1a$inc), seq(0,1,.01))
                               )
 roundscale=1
    quants <- weighted.quantile(p1a$inc, w=p1a$population, probs=seq(0,1,0.25), na.rm = TRUE)
@@ -725,7 +764,7 @@ ny_map_data <- ny_zips %>%
     left_join(zcta_pop, by = "ZCTA5CE10")
 
 p2a <- ny_map_data%>%
-  mutate(   inc=N/population*100000) %>%
+  mutate(inc=N/population*100000) %>%
   filter(!is.na(inc) & population!=0) 
 
     ds$cuts <- as.integer(cut(ecdf(ds[,plotvar])(ds[,plotvar]), seq(0,1,.01)))
