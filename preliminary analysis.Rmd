@@ -159,7 +159,7 @@ ATYPE
 3 =  Elective (2019: 39,394  in Medicare vs 50,391 in SID) 27% diff
 4 =  Newborn
 5 =  Trauma Center
-9=Missing ((2019: 161 in Medicare))
+9 = Missing ((2019: 161 in Medicare))
 
 
 FL
@@ -536,7 +536,7 @@ inp1_fl <- pq_stream_sid_fl %>%
 saveRDS(inp1_fl,'R:/ParquetData/fl_rsv.RDS')
 
 
-pq_stream_sedd_ny <- open_dataset("R:/ParquetData/NY_SEDD", format = "parquet")
+pq_stream_sedd_ny <- open_dataset("/Volumes/HCUPdata-CC0941-MEDSPH/ParquetData/NY_SEDD", format = "parquet")
 
 ed_ny <- pq_stream_sedd_ny %>%
     dplyr::select(AGE,  AYEAR,AMONTH,ZIP, ZIP3,ZIPINC_QRTL,starts_with('I10_DX')) %>%
@@ -569,7 +569,7 @@ ed_ny <- pq_stream_sedd_ny %>%
     dplyr::select(AGE,  AYEAR, AMONTH,ZIP, ZIP3,ZIPINC_QRTL,all_dx) %>%
   collect()
 
-saveRDS(ed_ny,'R:/ParquetData/ny_ed_rsv.RDS')
+#saveRDS(ed_ny,'R:/ParquetData/ny_ed_rsv.RDS')
 
 ##inpatient
 pq_stream_sid_ny <- open_dataset("R:/ParquetData/NY", format = "parquet")
