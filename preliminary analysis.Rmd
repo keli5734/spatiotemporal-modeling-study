@@ -639,10 +639,15 @@ inp_ny <- inp_ny %>%
   mutate(date = paste0(AYEAR,"/",AMONTH,"/","01")) %>% 
   mutate(date = ymd(date)) %>% 
   mutate(AGE = as.numeric(AGE)) %>% 
-  mutate(AGE_GROUP = if_else(AGE >=0 & AGE < 5, "0-5", 
-                             if_else(AGE >=5 & AGE < 19, "5-19",
-                                     if_else(AGE >= 19 & AGE <39, "19-39", 
-                                             ifelse(AGE >= 39 & AGE < 59, "39-59", "60+"))))) 
+  mutate(AGE_GROUP = if_else(AGE >=0 & AGE < 1, "<1", 
+                             if_else(AGE >=1 & AGE < 2, "1-2",
+                                     if_else(AGE >= 2 & AGE <3, "2-3", 
+                                             ifelse(AGE >= 3 & AGE < 4, "3-4", 
+                                                    ifelse(AGE >= 4 & AGE < 5, "4-5", 
+                                                           ifelse(AGE >= 5 & AGE <19, "5-19", 
+                                                                  ifelse(AGE >= 19 & AGE <39, "19-39",
+                                                                         ifelse(AGE >= 39 & AGE < 59, "39-59", 
+                                                                                ifelse(AGE >= 59 & AGE <79, "59-79", ">80+")))))))))) 
 inp_ny <- inp_ny %>% 
   mutate(season = ifelse(date >= "2015-07-01" & date <= "2016-07-01", "2015/16", 
                          ifelse(date >= "2016-07-01" & date <= "2017-07-01", "2016/17",
@@ -669,10 +674,15 @@ ed_ny <- ed_ny %>%
   mutate(date = paste0(AYEAR,"/",AMONTH,"/","01")) %>% 
   mutate(date = ymd(date)) %>% 
   mutate(AGE = as.numeric(AGE)) %>% 
-  mutate(AGE_GROUP = if_else(AGE >=0 & AGE < 5, "0-5", 
-                             if_else(AGE >=5 & AGE < 19, "5-19",
-                                     if_else(AGE >= 19 & AGE <39, "19-39", 
-                                             ifelse(AGE >= 39 & AGE < 59, "39-59", "60+")))))
+  mutate(AGE_GROUP = if_else(AGE >=0 & AGE < 1, "<1", 
+                             if_else(AGE >=1 & AGE < 2, "1-2",
+                                     if_else(AGE >= 2 & AGE <3, "2-3", 
+                                             ifelse(AGE >= 3 & AGE < 4, "3-4", 
+                                                    ifelse(AGE >= 4 & AGE < 5, "4-5", 
+                                                           ifelse(AGE >= 5 & AGE <19, "5-19", 
+                                                                  ifelse(AGE >= 19 & AGE <39, "19-39",
+                                                                         ifelse(AGE >= 39 & AGE < 59, "39-59", 
+                                                                                ifelse(AGE >= 59 & AGE <79, "59-79", ">80+")))))))))) 
 
 ed_ny <- ed_ny %>% 
   mutate(season = ifelse(date >= "2015-07-01" & date <= "2016-07-01", "2015/16", 
