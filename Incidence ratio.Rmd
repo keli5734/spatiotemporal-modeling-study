@@ -1,0 +1,265 @@
+---
+title: "Incidence ratio"
+author: "Ke Li"
+date: "2024-08-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(arrow)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(spatstat)
+
+library(usmap)
+library(scales)
+#library(spatstat)
+
+vircol <-  viridis_pal()(100)
+
+library(duckdb)
+library(plotly)
+library(lubridate)
+# source('./R/plot.fun.R')
+# source('./R/schema.R')
+state_cw <- read.csv('./Data/SSA_state_crosswalk.csv')
+# state_cw <- statepop %>% select(fips, abbr)
+state.info <- cbind.data.frame(state.name, state.abb, state.region)
+
+```
+
+
+```{r, upload data, warning=FALSE}
+inp_ny <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/ny_inp_rsv.RDS")
+ed_ny <- readRDS('/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/ny_ed_rsv.RDS') %>%
+  mutate(AYEAR=as.numeric(AYEAR))
+
+inp_fl <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/fl_rsv.RDS")
+ed_fl <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/fl_ed_rsv.RDS")
+
+ny_data <- rbind(inp_ny, ed_ny)
+fl_data <- rbind(inp_fl, ed_fl) # Florida does not have AMONTH 
+
+rm(inp_ny, ed_ny, inp_fl, ed_fl)
+
+```
+
+```{r, adding age group and seasons, warning= FALSE}
+
+ny_data <- ny_data %>% 
+  filter(!is.na(AYEAR)) %>% 
+  filter(!is.na(AMONTH)) %>% 
+  mutate(date = paste0(AYEAR,"/",AMONTH,"/","01")) %>% 
+  mutate(date = ymd(date)) %>% 
+  mutate(AGE = as.numeric(AGE)) %>% 
+  filter(!is.na(AGE)) %>% 
+   mutate(AGE_GROUP = ifelse(AGE >=0 & AGE <5, "under 5", 
+                            ifelse(AGE >= 5 & AGE <=9, "5-9", 
+                                   ifelse(AGE >=10 & AGE <=14, "10-14", 
+                                          ifelse(AGE >= 15 & AGE <=19, "15-19",
+                                                 ifelse(AGE >=20 & AGE <24, "20-24",
+                                                        ifelse(AGE >= 25 & AGE <= 29, "25-29",
+                                                               ifelse(AGE >= 30 & AGE <=34, "30-34",
+                                                                      ifelse(AGE >= 35 & AGE <= 39, "35-39",
+                                                                             ifelse(AGE >= 40 & AGE <=44, "40-44",
+                                                                                    ifelse(AGE >= 45 & AGE <=49, "45-49",
+                                                                                           ifelse(AGE >= 50 & AGE <= 54, "50-54",
+                                                                                                  ifelse(AGE >= 55 & AGE <= 59, "55-59",
+                                                                                                         ifelse(AGE >= 60 & AGE <=64, "60-64",
+                                                                                                                ifelse(AGE >=65 & AGE <= 69,"65-69",
+                                                                                                                       ifelse(AGE >=70 & AGE <= 74, "70-74",
+                                                                                                                              ifelse(AGE >=75 & AGE <= 79, "75-79", 
+                                                                                                                                     ifelse(AGE >= 80 & AGE <= 84, "80-84",
+                                                                                                                                            ifelse(AGE >=85, "85 above", NA))))))))))))))))))) %>% 
+filter(!is.na(AGE_GROUP)) %>% 
+  mutate(season = ifelse(date >= "2015-07-01" & date <= "2016-07-01", "2015/16",
+                         ifelse(date >= "2016-07-01" & date <= "2017-07-01", "2016/17",
+                                ifelse(date >= "2017-07-01" & date <= "2018-07-01", "2017/18",
+                                       ifelse(date >= "2018-07-01" & date <= "2019-07-01", "2018/19", NA)))))
+
+ny_data$AGE_GROUP <- factor(ny_data$AGE_GROUP, levels = c("under 5", 
+                                                          "5-9", 
+                                                          "10-14", 
+                                                          "15-19", 
+                                                          "20-24", 
+                                                          "25-29",
+                                                          "30-34",
+                                                          "35-39",
+                                                          "40-44",
+                                                          "45-49",
+                                                          "50-54",
+                                                          "55-59",
+                                                          "60-64",
+                                                          "65-69",
+                                                          "70-74",
+                                                          "75-79",
+                                                          "80-84",
+                                                          "85 above"))
+
+ny_data %>% 
+  group_by(AGE_GROUP) %>% 
+  summarise(N = n()) %>% 
+  ggplot(aes(x = AGE_GROUP, y = N, fill = AGE_GROUP)) + 
+  geom_bar(stat = "identity") + 
+  ylab("Incidence") + 
+  theme_minimal()
+
+
+
+
+fl_data <- fl_data %>% 
+  mutate(AGE = as.numeric(AGE)) %>% 
+  filter(!is.na(AGE)) %>% 
+  mutate(AGE_GROUP = ifelse(AGE >=0 & AGE <5, "under 5", 
+                            ifelse(AGE >= 5 & AGE <=9, "5-9", 
+                                   ifelse(AGE >=10 & AGE <=14, "10-14", 
+                                          ifelse(AGE >= 15 & AGE <=19, "15-19",
+                                                 ifelse(AGE >=20 & AGE <24, "20-24",
+                                                        ifelse(AGE >= 25 & AGE <= 29, "25-29",
+                                                               ifelse(AGE >= 30 & AGE <=34, "30-34",
+                                                                      ifelse(AGE >= 35 & AGE <= 39, "35-39",
+                                                                             ifelse(AGE >= 40 & AGE <=44, "40-44",
+                                                                                    ifelse(AGE >= 45 & AGE <=49, "45-49",
+                                                                                           ifelse(AGE >= 50 & AGE <= 54, "50-54",
+                                                                                                  ifelse(AGE >= 55 & AGE <= 59, "55-59",
+                                                                                                         ifelse(AGE >= 60 & AGE <=64, "60-64",
+                                                                                                                ifelse(AGE >=65 & AGE <= 69,"65-69",
+                                                                                                                       ifelse(AGE >=70 & AGE <= 74, "70-74",
+                                                                                                                              ifelse(AGE >=75 & AGE <= 79, "75-79", 
+                                                                                                                                     ifelse(AGE >= 80 & AGE <= 84, "80-84",
+                                                                                                                                            ifelse(AGE >=85, "85 above", NA))))))))))))))))))) %>% 
+filter(!is.na(AGE_GROUP))
+  
+
+fl_data$AGE_GROUP <- factor(fl_data$AGE_GROUP, levels = c("under 5", 
+                                                          "5-9", 
+                                                          "10-14", 
+                                                          "15-19", 
+                                                          "20-24", 
+                                                          "25-29",
+                                                          "30-34",
+                                                          "35-39",
+                                                          "40-44",
+                                                          "45-49",
+                                                          "50-54",
+                                                          "55-59",
+                                                          "60-64",
+                                                          "65-69",
+                                                          "70-74",
+                                                          "75-79",
+                                                          "80-84",
+                                                          "85 above"))
+
+fl_data %>% 
+  group_by(AGE_GROUP) %>% 
+  summarise(N = n()) %>% 
+  ggplot(aes(x = AGE_GROUP, y = N, fill = AGE_GROUP)) + 
+  geom_bar(stat = "identity") + 
+  ylab("Incidence") + 
+  theme_minimal()
+
+```
+
+
+```{r, import population in FL and NY, warning=FALSE}
+# population by zip code
+ny_pop <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS")
+fl_pop <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS")
+fl_pop2020 <- readxl::read_xlsx(path = "/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_2020_population.xlsx", sheet = "Data") %>% 
+  mutate(AGE = unique(sort(fl_data$AGE_GROUP))) %>% 
+  mutate(Estimate = as.numeric(fl_pop2020$Estimate)) %>% 
+  mutate(percentage = Estimate / sum(Estimate)) %>% 
+  rename("AGE_GROUP" = "AGE",
+         "population" = "Estimate")
+  
+
+fl_data_age_dist <- fl_data %>% 
+  group_by(AGE_GROUP) %>% 
+  summarise(Count = n()) %>%  
+  right_join(fl_pop2020) %>% 
+  mutate(incidence_rate = Count/population*100000) # take calculate incidence rate here...
+
+
+AGE_GROUP <- sort(unique(ny_data$AGE_GROUP))
+incidence_rate <- fl_data_age_dist$incidence_rate
+
+ny_data_age_dist <- ny_data %>% 
+  group_by(AGE_GROUP, ZIP) %>% 
+  summarise(Count = n()) %>% 
+  ungroup() 
+
+n_age_group <- as.numeric(table(ny_data_age_dist$AGE_GROUP))
+ny_data_age_dist$incidence_rate <- rep(incidence_rate,n_age_group)
+
+```
+
+```{r, upload zip code NY, warning=FALSE}
+
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(tigris)
+
+
+options(tigris_use_cache = TRUE)
+# Get ZIP code shapefile for New York
+ny_zips <- zctas(state = "NY", year = 2010)
+
+zcta_pop <- readRDS('/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS') %>%
+  select(GEOID, population = estimate) %>%
+  rename(ZCTA5CE10 = GEOID) # forward simulation ...
+
+ny_map_data <- ny_zips %>%
+  left_join(ny_data_age_dist, by = c("ZCTA5CE10" = "ZIP")) %>%
+    left_join(zcta_pop, by = "ZCTA5CE10") 
+
+ny_map_data <- ny_map_data %>% 
+  mutate(standard_count = round(incidence_rate/100000*population))
+
+
+
+```
+
+```{r, heatmap, warning=FALSE}
+p1a <- nyc_map_data%>%
+  mutate(inc=N/population*100000) %>% # calculate the incidence ratio
+  filter(!is.na(inc) & population!=0) #%>% 
+  #mutate(Z_score_inc = X2$Z_score)
+
+p1a <- p1a %>% 
+  group_by(season) %>% 
+  mutate(cuts = as.integer(cut(ewcdf(inc, weights=population)(inc), seq(0,1,.01))))
+
+#p1a$cuts = as.integer(cut(ewcdf(p1a$inc, weights=p1a$population)(p1a$inc), seq(0,1,.01)))
+
+roundscale <- 1
+
+quants <- weighted.quantile(p1a$inc, w=p1a$population, probs=seq(0,1,0.25), na.rm = TRUE)
+
+plotlabs <- c(as.character(''), 
+                  rep('', 23),  
+                  as.character(round(quants[2],roundscale)),
+                  rep('', 24),  
+                  as.character(round(quants[3],roundscale)),
+                  rep('', 24),  
+                  as.character(round(quants[4],roundscale)),
+                  rep('', 24),  
+                  as.character(''))
+
+library(viridisLite)
+ggplot(data = p1a) +
+  geom_sf(aes(fill = cuts),color=NA) +
+ # scale_fill_viridis_c(name = "Value") +
+  theme_minimal() +
+  labs(title = "New York City ZIP Code Choropleth Map")+
+    theme(panel.background = element_rect(color = "white", fill = "white")) +
+    scale_fill_stepsn('Rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
+                      colors=inferno(20),
+                      guide = guide_colorsteps(even.steps = FALSE)) + 
+  facet_wrap(~season)
+
+```
+
+
