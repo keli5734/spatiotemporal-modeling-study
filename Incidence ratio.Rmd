@@ -222,21 +222,20 @@ ny_map_data <- ny_map_data %>%
 
 ```
 
+
 ```{r, heatmap, warning=FALSE}
-p1a <- nyc_map_data%>%
-  mutate(inc=N/population*100000) %>% # calculate the incidence ratio
-  filter(!is.na(inc) & population!=0) #%>% 
-  #mutate(Z_score_inc = X2$Z_score)
+p1a <- ny_map_data%>%
+  filter(!is.na(standard_count))  
 
 p1a <- p1a %>% 
-  group_by(season) %>% 
-  mutate(cuts = as.integer(cut(ewcdf(inc, weights=population)(inc), seq(0,1,.01))))
+  group_by(AGE_GROUP) %>% 
+  mutate(cuts = as.integer(cut(ewcdf(standard_count, weights=population)(standard_count), seq(0,1,.01))))
 
 #p1a$cuts = as.integer(cut(ewcdf(p1a$inc, weights=p1a$population)(p1a$inc), seq(0,1,.01)))
 
 roundscale <- 1
 
-quants <- weighted.quantile(p1a$inc, w=p1a$population, probs=seq(0,1,0.25), na.rm = TRUE)
+quants <- weighted.quantile(p1a$standard_count, w=p1a$population, probs=seq(0,1,0.25), na.rm = TRUE)
 
 plotlabs <- c(as.character(''), 
                   rep('', 23),  
@@ -249,16 +248,19 @@ plotlabs <- c(as.character(''),
                   as.character(''))
 
 library(viridisLite)
-ggplot(data = p1a) +
+p1a %>% filter(AGE_GROUP %in% c("under 5", "5-9", "10-14",
+                                "60-64","65-69","70-74", "75-79",
+                                "80-84","85 above")) %>% 
+ggplot() +
   geom_sf(aes(fill = cuts),color=NA) +
  # scale_fill_viridis_c(name = "Value") +
   theme_minimal() +
-  labs(title = "New York City ZIP Code Choropleth Map")+
+  labs(title = "New York State ZIP Code Choropleth Map")+
     theme(panel.background = element_rect(color = "white", fill = "white")) +
     scale_fill_stepsn('Rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
                       colors=inferno(20),
                       guide = guide_colorsteps(even.steps = FALSE)) + 
-  facet_wrap(~season)
+  facet_wrap(~AGE_GROUP)
 
 ```
 
