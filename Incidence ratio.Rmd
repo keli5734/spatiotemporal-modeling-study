@@ -233,7 +233,7 @@ ny_map_data <- ny_map_data %>%
 ```
 
 
-```{r, heatmap, warning=FALSE}
+```{r, heatmap NY, warning=FALSE}
 p1a <- ny_map_data%>%
   filter(!is.na(standard_count))  
 
@@ -265,9 +265,9 @@ ggplot() +
   geom_sf(aes(fill = cuts),color=NA) +
  # scale_fill_viridis_c(name = "Value") +
   theme_minimal() +
-  labs(title = "New York City ZIP Code Choropleth Map")+
+  labs(title = "New York City ZIP Code Choropleth Map by age group (2016-2020)")+
     theme(panel.background = element_rect(color = "white", fill = "white")) +
-    scale_fill_stepsn('Rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
+    scale_fill_stepsn('Incidence', breaks= 1:100, limits = c(0,100), labels=plotlabs,
                       colors=inferno(20),
                       guide = guide_colorsteps(even.steps = FALSE)) + 
   facet_wrap(~AGE_GROUP)
@@ -275,3 +275,78 @@ ggplot() +
 ```
 
 
+```{r, heatmap FL, warning= FALSE}
+# fl_data_age_dist
+
+zcta_pop <- get_acs(
+  geography = "zcta",
+  variables = "B01003_001", # Total population
+  state = "FL",
+  year = 2019  # You can change the year as needed
+)%>%
+  select(GEOID, population = estimate) %>%
+  rename(ZCTA5CE10 = GEOID) # forward simulation ...
+
+#saveRDS(zcta_pop,'/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS')
+ 
+
+options(tigris_use_cache = TRUE)
+# Get ZIP code shapefile for New York
+fl_zips <- zctas(state = "FL", year = 2010)
+
+fl_case_data <- fl_data %>% 
+  group_by(ZIP, AGE_GROUP) %>% 
+  summarise(N = n()) %>% 
+  ungroup()
+
+#all_data2 <- all_data %>% filter(season == "2016/17")
+fl_map_data <- fl_zips %>%
+  left_join(fl_case_data, by = c("ZCTA5CE10" = "ZIP")) %>%
+    left_join(zcta_pop, by = "ZCTA5CE10")
+
+
+
+p2a <- fl_map_data%>%
+  mutate(inc=N/population*100000) %>%
+  filter(!is.na(inc) & population!=0) 
+
+p2a <- p2a %>% 
+  group_by(AGE_GROUP) %>% 
+  mutate(cuts = as.integer(cut(ewcdf(inc, weights=population)(inc), seq(0,1,.01))))
+
+#p2a$cuts <- as.integer(cut(ecdf(p2a[,plotvar])(p2a[,plotvar]), seq(0,1,.01)))
+#p2a$cuts = as.integer(cut(ewcdf(p2a$inc, weights=p2a$population)(p2a$inc), seq(0,1,.01)))
+#p2a$cuts = as.integer(cut(ewcdf(p2a$inc)(p2a$inc), seq(0,1,.01)))
+  
+roundscale <- 1
+#quants <- weighted.quantile(p2a$inc, w=p2a$population, probs=seq(0,1,0.25), na.rm = TRUE)
+quants <- quantile(p2a$inc,  probs=seq(0,1,0.25), na.rm = TRUE)
+
+plotlabs <- c(as.character(''), 
+                  rep('', 23),  
+                  as.character(round(quants[2],roundscale)),
+                  rep('', 24),  
+                  as.character(round(quants[3],roundscale)),
+                  rep('', 24),  
+                  as.character(round(quants[4],roundscale)),
+                  rep('', 24),  
+                  as.character(''))
+  
+p2a %>% filter(AGE_GROUP %in% c("under 5", "5-9", "10-14",
+                                "60-64","65-69","70-74", "75-79",
+                                "80-84","85 above")) %>% 
+ggplot() +
+  geom_sf(aes(fill = cuts),color=NA) +
+ # scale_fill_viridis_c(name = "Value") +
+  theme_minimal() +
+  labs(title = "Florida ZIP Code Choropleth Map by age group (2015-2019)")+
+    theme(panel.background = element_rect(color = "white", fill = "white")) +
+    scale_fill_stepsn('Incidence rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
+                      colors=inferno(20),
+                      guide = guide_colorsteps(even.steps = FALSE)) + 
+  facet_wrap(~AGE_GROUP)
+  
+
+
+
+```
