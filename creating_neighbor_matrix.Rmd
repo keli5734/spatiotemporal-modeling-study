@@ -49,7 +49,11 @@ library(cluster)
 ```
 
 ```{r, warning=FALSE}
-
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(tigris)
+library(viridisLite)
 nyc_zips <- c(
   "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", # Manhattan
   "110", "111", "112", "113", "114", "116", # Bronx
@@ -66,37 +70,69 @@ ny_zips <- zctas(state = "NY", year = 2010) # Geographic information for NY
 nyc_zips <- ny_zips  %>% 
   filter(substr(ZCTA5CE10, 1, 3) %in% nyc_zips) 
 
-neighb <- poly2nb(st_make_valid(nyc_zips), queen = T, snap = sqrt(0.001))
+nyc_sp <- as_Spatial(nyc_zips) # Convert the sf object to a spatial object
+
+nyc_nb <- poly2nb(nyc_sp) # create the neighborhood matrix using the poly2nb function from the spdep package:
+
+nyc_matrix <- nb2mat(nyc_nb, style = "B", zero.policy = TRUE) # create the neighborhood matrix in a matrix format
+
+{
+plot(st_geometry(nyc_zips))
+plot(nyc_nb, st_coordinates(st_centroid(st_geometry(nyc_zips))), add = TRUE, col = "red")
+}
+
+library(rgeos)
+nyc_zips2 <- st_transform(nyc_zips, crs = 4326) # WGS84 Ensure it's in the right CRS (Coordinate Reference System)
+ 
+nyc_zip_centroids <- st_centroid(nyc_zips2) # Calculate centroids
+
+distance_matrix <- st_distance(nyc_zip_centroids) # Calculate distance matrix
+
+dist_df <- as.data.frame(as.table(distance_matrix))
+names(dist_df) <- c("ZIP1", "ZIP2", "Distance")
+
+
+library(igraph)
+
+nyc_nb <- poly2nb(nyc_zips) # Create neighborhood list
+empty_neighbors <- which(card(nyc_nb) == 0) # Identify polygons with no neighbors
+# Assign nearest neighbors to those without neighbors
+if (length(empty_neighbors) > 0) {
+  nearest_neighbors <- knn2nb(knearneigh(coordinates(nyc_sp)[empty_neighbors, ], k = 1))
+  for (i in seq_along(empty_neighbors)) {
+    nyc_nb[[empty_neighbors[i]]] <- nearest_neighbors[[i]]
+  }
+}
+
+nyc_listw <- nb2listw(nyc_nb, style = "B") # Convert to listw object
+nyc_graph <- graph_from_adj_list(nb2listw(nyc_nb, style = "B")$neighbours) # Convert neighborhood list to an igraph object
+shortest_distances <- distances(nyc_graph) # Calculate shortest path distances (number of hops)
+shortest_distances[is.infinite(shortest_distances)] <- 9999
+
+
+
+
+# neighb <- poly2nb(st_make_valid(nyc_zips), queen = T, snap = sqrt(0.001))
+# p <- st_make_valid(nyc_zips)
+# xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
+# coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
+# plot(st_geometry(p), border="grey")
 
  
-p <- st_make_valid(nyc_zips)
-xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
-coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
-plot(st_geometry(p), border="grey")
- 
-
-
-
-
-
-
-
-
-
 
 ### code from the dengue project ###
-#SPATIAL MATRIX:
-MDR_NEW <- st_read(dsn = "./Data/shapefiles/geo_export_983ef008-08a2-4deb-865c-64cde571e14c.shp") #shape file
-# maybe geometry matters?
-neighb <- poly2nb(st_make_valid(MDR_NEW), queen = T, snap = sqrt(0.001))
+# SPATIAL MATRIX:
+# MDR_NEW <- st_read(dsn = "./Data/shapefiles/geo_export_983ef008-08a2-4deb-865c-64cde571e14c.shp") #shape file
+# # maybe geometry matters?
+# neighb <- poly2nb(st_make_valid(MDR_NEW), queen = T, snap = sqrt(0.001))
+# 
+#  
+# p <- st_make_valid(MDR_NEW)
+# xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
+# coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
+# plot(st_geometry(p), border="grey")
 
- 
-p <- st_make_valid(MDR_NEW)
-xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
-coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
-plot(st_geometry(p), border="grey")
-
-#plot(xx, coords, pch = 19, cex = 0.4, add=TRUE)
+# plot(xx, coords, pch = 19, cex = 0.4, add=TRUE)
 
  
 # spat_IDS <- readRDS( "./Data/.rds")
