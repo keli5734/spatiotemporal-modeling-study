@@ -1,0 +1,76 @@
+---
+title: "creating_neighbor_matrix"
+author: "Ke Li"
+date: "2024-08-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(parallel)
+library(stats)
+library(dplyr)
+library(readr)
+library(readxl)
+library(tidyr)
+library(tidyverse)
+library(zoo)
+library(pbapply)
+ 
+#inla.setOption(mkl=TRUE)
+library(scoringutils)
+library(spdep)
+library(lattice)  # Load the lattice package if you are using lattice graphics
+library(stringr)
+library(janitor)
+library(surveillance)
+library(lubridate)
+library(parallel)
+library(stats)
+library(dplyr)
+library(readr)
+library(readxl)
+library(tidyr)
+library(tidyverse)
+library(zoo)
+library(lubridate)
+library(pbapply)
+ 
+#inla.setOption(mkl=TRUE)
+library(MASS)
+library(scoringutils)
+library(sf)
+library(spdep)
+library(raster)
+library(Hmisc)
+library(ggdendro)
+library(dtwclust)
+library(sf)
+library(cluster)
+```
+
+```{r, warning=FALSE}
+#SPATIAL MATRIX:
+MDR_NEW <- st_read(dsn = "./Data/shapefiles/geo_export_983ef008-08a2-4deb-865c-64cde571e14c.shp") #shape file
+# maybe geometry matters?
+
+neighb <- poly2nb(st_make_valid(MDR_NEW), queen = T, snap = sqrt(0.001))
+
+ 
+p <- st_make_valid(MDR_NEW)
+xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
+coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
+plot(st_geometry(p), border="grey")
+
+plot(xx, coords, pch = 19, cex = 0.4, add=TRUE)
+
+ 
+
+spat_IDS <- readRDS( "./Data/.rds")
+nb2INLA("./Data/MDR.graph", neighb)  #graph for inla
+
+# Set the file path for the adjacency graph file
+MDR.adj <- paste(getwd(), "./Data/MDR.graph", sep = "")
+
+
+```
+
