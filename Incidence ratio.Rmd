@@ -46,6 +46,7 @@ rm(inp_ny, ed_ny, inp_fl, ed_fl)
 
 ```
 
+
 ```{r, adding age group and seasons, warning= FALSE}
 
 ny_data <- ny_data %>% 
@@ -185,31 +186,35 @@ fl_data %>%
 # population by zip code
 ny_pop <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS")
 fl_pop <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS")
-fl_pop2020 <- readxl::read_xlsx(path = "/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_2020_population.xlsx", sheet = "Data") %>% 
-  mutate(AGE = unique(sort(fl_data$AGE_GROUP))) %>% 
-  mutate(Estimate = as.numeric(fl_pop2020$Estimate)) %>% 
-  mutate(percentage = Estimate / sum(Estimate)) %>% 
+
+standard_popluation <- readxl::read_xlsx(path = "/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/US_2020_population_standarded.xlsx", sheet = "Data") %>%
+  mutate(AGE = unique(sort(ny_data$AGE_GROUP))) %>% 
   rename("AGE_GROUP" = "AGE",
-         "population" = "Estimate")
+         "Fraction" = "Percentage") 
+
   
 
 fl_data_age_dist <- fl_data %>% 
-  group_by(AGE_GROUP) %>% 
-  summarise(Count = n()) %>%  
-  right_join(fl_pop2020) %>% 
-  mutate(incidence_rate = Count/population*100000) # take calculate incidence rate here...
+  group_by(AGE_GROUP, ZIP) %>% 
+  summarise(Count = n())  %>% 
+  ungroup()   
+
+  #right_join(standard_popluation) %>% 
+  #select(-Population) %>% 
+  #group_by(ZIP, AGE_GROUP) 
+  #mutate(incidence_rate = Count/population*100000) # take calculate incidence rate here...
 
 
-AGE_GROUP <- sort(unique(ny_data$AGE_GROUP))
-incidence_rate <- fl_data_age_dist$incidence_rate
+# AGE_GROUP <- sort(unique(ny_data$AGE_GROUP))
+# incidence_rate <- fl_data_age_dist$incidence_rate
 
 ny_data_age_dist <- ny_data %>% 
   group_by(AGE_GROUP, ZIP) %>% 
   summarise(Count = n()) %>% 
   ungroup() 
 
-n_age_group <- as.numeric(table(ny_data_age_dist$AGE_GROUP))
-ny_data_age_dist$incidence_rate <- rep(incidence_rate,n_age_group)
+# n_age_group <- as.numeric(table(ny_data_age_dist$AGE_GROUP))
+# ny_data_age_dist$incidence_rate <- rep(incidence_rate,n_age_group)
 
 ```
 
@@ -364,7 +369,7 @@ ggplot() +
                       guide = guide_colorsteps(even.steps = FALSE)) + 
   facet_wrap(~AGE_GROUP)
   
-
-
-
 ```
+
+
+ 
