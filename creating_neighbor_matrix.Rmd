@@ -49,10 +49,45 @@ library(cluster)
 ```
 
 ```{r, warning=FALSE}
+
+nyc_zips <- c(
+  "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", # Manhattan
+  "110", "111", "112", "113", "114", "116", # Bronx
+  "115", "117", "118", "119", # Staten Island
+  "111", "112", "113", "114", "116", # Brooklyn (some overlap with Bronx)
+  "110", "111", "113", "114", "116"  # Queens (some overlap with Brooklyn and Bronx)
+)
+
+
+options(tigris_use_cache = TRUE)
+# Get ZIP code shapefile for New York
+ny_zips <- zctas(state = "NY", year = 2010) # Geographic information for NY
+
+nyc_zips <- ny_zips  %>% 
+  filter(substr(ZCTA5CE10, 1, 3) %in% nyc_zips) 
+
+neighb <- poly2nb(st_make_valid(nyc_zips), queen = T, snap = sqrt(0.001))
+
+ 
+p <- st_make_valid(nyc_zips)
+xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
+coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
+plot(st_geometry(p), border="grey")
+ 
+
+
+
+
+
+
+
+
+
+
+### code from the dengue project ###
 #SPATIAL MATRIX:
 MDR_NEW <- st_read(dsn = "./Data/shapefiles/geo_export_983ef008-08a2-4deb-865c-64cde571e14c.shp") #shape file
 # maybe geometry matters?
-
 neighb <- poly2nb(st_make_valid(MDR_NEW), queen = T, snap = sqrt(0.001))
 
  
@@ -61,15 +96,14 @@ xx <- poly2nb(p, queen = T, snap = sqrt(0.001))
 coords <- st_coordinates(st_centroid(st_geometry(p))) # this seems to miss some polygons
 plot(st_geometry(p), border="grey")
 
-plot(xx, coords, pch = 19, cex = 0.4, add=TRUE)
+#plot(xx, coords, pch = 19, cex = 0.4, add=TRUE)
 
  
-
-spat_IDS <- readRDS( "./Data/.rds")
-nb2INLA("./Data/MDR.graph", neighb)  #graph for inla
-
-# Set the file path for the adjacency graph file
-MDR.adj <- paste(getwd(), "./Data/MDR.graph", sep = "")
+# spat_IDS <- readRDS( "./Data/.rds")
+# nb2INLA("./Data/MDR.graph", neighb)  #graph for inla
+# 
+# # Set the file path for the adjacency graph file
+# MDR.adj <- paste(getwd(), "./Data/MDR.graph", sep = "")
 
 
 ```
