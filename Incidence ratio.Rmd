@@ -182,7 +182,7 @@ fl_data %>%
 ```
 
 
-```{r, import population in FL and NY, warning=FALSE}
+```{r, import population NY, FL and standarded US 2020, warning=FALSE}
 # population by zip code
 ny_pop <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS")
 fl_pop <- readRDS("/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS")
@@ -193,11 +193,16 @@ standard_popluation <- readxl::read_xlsx(path = "/Volumes/HCUPdata-CC0941-MEDSPH
          "Fraction" = "Percentage") 
 
   
+ny_data_age_dist <- ny_data %>% 
+  group_by(AGE_GROUP, ZIP) %>% 
+  summarise(Count = n()) %>% 
+  ungroup()  # this gives the number of cases by ZIP-code by AGE_GROUP for NY
+
 
 fl_data_age_dist <- fl_data %>% 
   group_by(AGE_GROUP, ZIP) %>% 
   summarise(Count = n())  %>% 
-  ungroup()   
+  ungroup()  # this gives the number of cases by ZIP-code by AGE_GROUP for FL
 
   #right_join(standard_popluation) %>% 
   #select(-Population) %>% 
@@ -205,13 +210,11 @@ fl_data_age_dist <- fl_data %>%
   #mutate(incidence_rate = Count/population*100000) # take calculate incidence rate here...
 
 
-# AGE_GROUP <- sort(unique(ny_data$AGE_GROUP))
+AGE_GROUP <- sort(unique(ny_data$AGE_GROUP))
+Fraction <- standard_popluation$Fraction
 # incidence_rate <- fl_data_age_dist$incidence_rate
 
-ny_data_age_dist <- ny_data %>% 
-  group_by(AGE_GROUP, ZIP) %>% 
-  summarise(Count = n()) %>% 
-  ungroup() 
+ 
 
 # n_age_group <- as.numeric(table(ny_data_age_dist$AGE_GROUP))
 # ny_data_age_dist$incidence_rate <- rep(incidence_rate,n_age_group)
@@ -224,11 +227,12 @@ library(sf)
 library(ggplot2)
 library(dplyr)
 library(tigris)
+library(viridisLite)
 
 nyc_zips <- c(
   "100", "101", "102", "103", "104", "105", "106", "107", "108", "109", # Manhattan
   "110", "111", "112", "113", "114", "116", # Bronx
-  #"115", "117", "118", "119", # Staten Island
+   "115", "117", "118", "119", # Staten Island
   "111", "112", "113", "114", "116", # Brooklyn (some overlap with Bronx)
   "110", "111", "113", "114", "116"  # Queens (some overlap with Brooklyn and Bronx)
 )
@@ -236,39 +240,69 @@ nyc_zips <- c(
 
 options(tigris_use_cache = TRUE)
 # Get ZIP code shapefile for New York
-ny_zips <- zctas(state = "NY", year = 2010)
+ny_zips <- zctas(state = "NY", year = 2010) # Geographic information for NY
 
-ny_zips <- ny_zips #%>% filter(substr(ZCTA5CE10, 1, 3) %in% nyc_zips)
+ny_zips <- ny_zips  %>% filter(substr(ZCTA5CE10, 1, 3) %in% nyc_zips) # filter for the NYC only 
 
 zcta_pop <- readRDS('/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/NY_pop_2019.RDS') %>%
   select(GEOID, population = estimate) %>%
-  rename(ZCTA5CE10 = GEOID) # forward simulation ...
+  rename(ZCTA5CE10 = GEOID) # give population for the ZIP code level
 
 ny_map_data <- ny_zips %>%
   left_join(ny_data_age_dist, by = c("ZCTA5CE10" = "ZIP")) %>%
     left_join(zcta_pop, by = "ZCTA5CE10") 
 
 ny_map_data <- ny_map_data %>% 
-  mutate(standard_count = round(incidence_rate/100000*population))
+  mutate(fraction  = ifelse(AGE_GROUP == AGE_GROUP[1],Fraction[1],
+                            ifelse(AGE_GROUP == AGE_GROUP[2], Fraction[2],
+                                   ifelse(AGE_GROUP == AGE_GROUP[3], Fraction[3], 
+                                          ifelse(AGE_GROUP == AGE_GROUP[4], Fraction[4], 
+                                                 ifelse(AGE_GROUP == AGE_GROUP[5], Fraction[5], 
+                                                        ifelse(AGE_GROUP == AGE_GROUP[6], Fraction[6], 
+                                                               ifelse(AGE_GROUP == AGE_GROUP[7], Fraction[7],
+                                                                      ifelse(AGE_GROUP == AGE_GROUP[8], Fraction[8], 
+                                                                             ifelse(AGE_GROUP == AGE_GROUP[9], Fraction[9],
+                                                                                    ifelse(AGE_GROUP == AGE_GROUP[10], Fraction[10],
+                                                                                           ifelse(AGE_GROUP == AGE_GROUP[11], Fraction[11],
+                                                                                                  ifelse(AGE_GROUP == AGE_GROUP[12], Fraction[12],
+                                                                                                         ifelse(AGE_GROUP == AGE_GROUP[13], Fraction[13],
+                                                                                                                ifelse(AGE_GROUP == AGE_GROUP[14], Fraction[14],
+                                                                                                                       ifelse(AGE_GROUP == AGE_GROUP[15], Fraction[15],
+                                                                                                                              ifelse(AGE_GROUP == AGE_GROUP[16], Fraction[16], 
+                                                                                                                                     ifelse(AGE_GROUP==AGE_GROUP[17], Fraction[17], Fraction[18]))))))))))))))))))
+  
+
+incidence_data <- ny_map_data %>% 
+  mutate(inc = Count / population * 100000 * fraction) %>% 
+  as.data.frame() %>% 
+  select(ZCTA5CE10, inc) %>% 
+  group_by(ZCTA5CE10) %>% 
+  summarise(adj_inc = sum(inc)) %>% 
+  ungroup() %>% 
+  filter(!is.na(adj_inc))
+
+ny_map_data <- ny_zips %>%
+   left_join(incidence_data, by = c("ZCTA5CE10" = "ZCTA5CE10")) %>% 
+   left_join(zcta_pop, by = "ZCTA5CE10")
 
 
-
-```
-
-
-```{r, heatmap NY, warning=FALSE}
 p1a <- ny_map_data%>%
-  filter(!is.na(standard_count))  
+  filter(!is.na(adj_inc))  %>% 
+  filter(!is.na(population))
+
+invalid_weights <- is.na(p1a$adj_inc) | is.nan(p1a$adj_inc) | is.infinite(p1a$adj_inc)
+p1a <- p1a[!invalid_weights, ]
+
 
 p1a <- p1a %>% 
-  group_by(AGE_GROUP) %>% 
-  mutate(cuts = as.integer(cut(ewcdf(standard_count, weights=population)(standard_count), seq(0,1,.01))))
+  #group_by(AGE_GROUP) %>% 
+  mutate(cuts = as.integer(cut(ewcdf(adj_inc, weights=population)(adj_inc), seq(0,1,.01))))
 
 #p1a$cuts = as.integer(cut(ewcdf(p1a$inc, weights=p1a$population)(p1a$inc), seq(0,1,.01)))
 
 roundscale <- 1
 
-quants <- weighted.quantile(p1a$standard_count, w=p1a$population, probs=seq(0,1,0.25), na.rm = TRUE)
+quants <- weighted.quantile(p1a$adj_inc, w=p1a$population, probs=seq(0,1,0.25), na.rm = TRUE)
 
 plotlabs <- c(as.character(''), 
                   rep('', 23),  
@@ -280,20 +314,21 @@ plotlabs <- c(as.character(''),
                   rep('', 24),  
                   as.character(''))
 
-library(viridisLite)
-p1a %>% filter(AGE_GROUP %in% c("under 5", "5-9", "10-14",
-                                "60-64","65-69","70-74", "75-79",
-                                "80-84","85 above")) %>% 
+
+# p1a %>% filter(AGE_GROUP %in% c("under 5", "5-9", "10-14",
+#                                 "60-64","65-69","70-74", "75-79",
+#                                 "80-84","85 above")) %>% 
+p1a %>% 
 ggplot() +
   geom_sf(aes(fill = cuts),color=NA) +
  # scale_fill_viridis_c(name = "Value") +
   theme_minimal() +
-  labs(title = "New York State ZIP Code Choropleth Map by age group (2016-2020)")+
+  labs(title = "New York City ZIP Code Choropleth Map (2016-2020)")+
     theme(panel.background = element_rect(color = "white", fill = "white")) +
-    scale_fill_stepsn('Incidence', breaks= 1:100, limits = c(0,100), labels=plotlabs,
+    scale_fill_stepsn('Incidence rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
                       colors=inferno(20),
-                      guide = guide_colorsteps(even.steps = FALSE)) + 
-  facet_wrap(~AGE_GROUP)
+                      guide = guide_colorsteps(even.steps = FALSE)) #+ 
+  #facet_wrap(~AGE_GROUP)
 
 ```
 
@@ -301,49 +336,140 @@ ggplot() +
 ```{r, heatmap FL, warning= FALSE}
 # fl_data_age_dist
 
-zcta_pop <- get_acs(
-  geography = "zcta",
-  variables = "B01003_001", # Total population
-  state = "FL",
-  year = 2019  # You can change the year as needed
-)%>%
-  select(GEOID, population = estimate) %>%
-  rename(ZCTA5CE10 = GEOID) # forward simulation ...
+# zcta_pop <- get_acs(
+#   geography = "zcta",
+#   variables = "B01003_001", # Total population
+#   state = "FL",
+#   year = 2019  # You can change the year as needed
+# )%>%
+#   select(GEOID, population = estimate) %>%
+#   rename(ZCTA5CE10 = GEOID) # forward simulation ...
+# 
+# #saveRDS(zcta_pop,'/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS')
+#  
+# 
+# options(tigris_use_cache = TRUE)
+# # Get ZIP code shapefile for New York
+# fl_zips <- zctas(state = "FL", year = 2010)
+# 
+# fl_case_data <- fl_data %>% 
+#   group_by(ZIP, AGE_GROUP) %>% 
+#   summarise(N = n()) %>% 
+#   ungroup()
+# 
+# #all_data2 <- all_data %>% filter(season == "2016/17")
+# fl_map_data <- fl_zips %>%
+#   left_join(fl_case_data, by = c("ZCTA5CE10" = "ZIP")) %>%
+#     left_join(zcta_pop, by = "ZCTA5CE10")
+# 
+# 
+# 
+# p2a <- fl_map_data%>%
+#   mutate(inc=N/population*100000) %>%
+#   filter(!is.na(inc) & population!=0) 
+# 
+# p2a <- p2a %>% 
+#   group_by(AGE_GROUP) %>% 
+#   mutate(cuts = as.integer(cut(ewcdf(inc, weights=population)(inc), seq(0,1,.01))))
+# 
+# #p2a$cuts <- as.integer(cut(ecdf(p2a[,plotvar])(p2a[,plotvar]), seq(0,1,.01)))
+# #p2a$cuts = as.integer(cut(ewcdf(p2a$inc, weights=p2a$population)(p2a$inc), seq(0,1,.01)))
+# #p2a$cuts = as.integer(cut(ewcdf(p2a$inc)(p2a$inc), seq(0,1,.01)))
+#   
+# roundscale <- 1
+# #quants <- weighted.quantile(p2a$inc, w=p2a$population, probs=seq(0,1,0.25), na.rm = TRUE)
+# quants <- quantile(p2a$inc,  probs=seq(0,1,0.25), na.rm = TRUE)
+# 
+# plotlabs <- c(as.character(''), 
+#                   rep('', 23),  
+#                   as.character(round(quants[2],roundscale)),
+#                   rep('', 24),  
+#                   as.character(round(quants[3],roundscale)),
+#                   rep('', 24),  
+#                   as.character(round(quants[4],roundscale)),
+#                   rep('', 24),  
+#                   as.character(''))
+#   
+# p2a %>% filter(AGE_GROUP %in% c("under 5", "5-9", "10-14",
+#                                 "60-64","65-69","70-74", "75-79",
+#                                 "80-84","85 above")) %>% 
+# ggplot() +
+#   geom_sf(aes(fill = cuts),color=NA) +
+#  # scale_fill_viridis_c(name = "Value") +
+#   theme_minimal() +
+#   labs(title = "Florida ZIP Code Choropleth Map by age group (2015-2019)")+
+#     theme(panel.background = element_rect(color = "white", fill = "white")) +
+#     scale_fill_stepsn('Incidence rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
+#                       colors=inferno(20),
+#                       guide = guide_colorsteps(even.steps = FALSE)) + 
+#   facet_wrap(~AGE_GROUP)
 
-#saveRDS(zcta_pop,'/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS')
- 
 
 options(tigris_use_cache = TRUE)
 # Get ZIP code shapefile for New York
-fl_zips <- zctas(state = "FL", year = 2010)
+fl_zips <- zctas(state = "FL", year = 2010) # Geographic information for NY
 
-fl_case_data <- fl_data %>% 
-  group_by(ZIP, AGE_GROUP) %>% 
-  summarise(N = n()) %>% 
-  ungroup()
+ 
 
-#all_data2 <- all_data %>% filter(season == "2016/17")
+zcta_pop <- readRDS('/Volumes/HCUPdata-CC0941-MEDSPH/Rcode_Ke/FL_pop_2019.RDS') %>%
+  select(GEOID, population = estimate) %>%
+  rename(ZCTA5CE10 = GEOID) # give population for the ZIP code level
+
 fl_map_data <- fl_zips %>%
-  left_join(fl_case_data, by = c("ZCTA5CE10" = "ZIP")) %>%
-    left_join(zcta_pop, by = "ZCTA5CE10")
+  left_join(fl_data_age_dist, by = c("ZCTA5CE10" = "ZIP")) %>%
+    left_join(zcta_pop, by = "ZCTA5CE10") 
 
+fl_map_data <- fl_map_data %>% 
+  mutate(fraction  = ifelse(AGE_GROUP == AGE_GROUP[1],Fraction[1],
+                            ifelse(AGE_GROUP == AGE_GROUP[2], Fraction[2],
+                                   ifelse(AGE_GROUP == AGE_GROUP[3], Fraction[3], 
+                                          ifelse(AGE_GROUP == AGE_GROUP[4], Fraction[4], 
+                                                 ifelse(AGE_GROUP == AGE_GROUP[5], Fraction[5], 
+                                                        ifelse(AGE_GROUP == AGE_GROUP[6], Fraction[6], 
+                                                               ifelse(AGE_GROUP == AGE_GROUP[7], Fraction[7],
+                                                                      ifelse(AGE_GROUP == AGE_GROUP[8], Fraction[8], 
+                                                                             ifelse(AGE_GROUP == AGE_GROUP[9], Fraction[9],
+                                                                                    ifelse(AGE_GROUP == AGE_GROUP[10], Fraction[10],
+                                                                                           ifelse(AGE_GROUP == AGE_GROUP[11], Fraction[11],
+                                                                                                  ifelse(AGE_GROUP == AGE_GROUP[12], Fraction[12],
+                                                                                                         ifelse(AGE_GROUP == AGE_GROUP[13], Fraction[13],
+                                                                                                                ifelse(AGE_GROUP == AGE_GROUP[14], Fraction[14],
+                                                                                                                       ifelse(AGE_GROUP == AGE_GROUP[15], Fraction[15],
+                                                                                                                              ifelse(AGE_GROUP == AGE_GROUP[16], Fraction[16], 
+                                                                                                                                     ifelse(AGE_GROUP==AGE_GROUP[17], Fraction[17], Fraction[18]))))))))))))))))))
+  
 
+incidence_data <- fl_map_data %>% 
+  mutate(inc = Count / population * 100000 * fraction) %>% 
+  as.data.frame() %>% 
+  select(ZCTA5CE10, inc) %>% 
+  group_by(ZCTA5CE10) %>% 
+  summarise(adj_inc = sum(inc)) %>% 
+  ungroup() %>% 
+  filter(!is.na(adj_inc))
 
+fl_map_data <- fl_zips %>%
+   left_join(incidence_data, by = c("ZCTA5CE10" = "ZCTA5CE10")) %>% 
+   left_join(zcta_pop, by = "ZCTA5CE10")
+
+ 
 p2a <- fl_map_data%>%
-  mutate(inc=N/population*100000) %>%
-  filter(!is.na(inc) & population!=0) 
+  filter(!is.na(adj_inc))  %>% 
+  filter(!is.na(population))
+
+invalid_weights <- is.na(p2a$adj_inc) | is.nan(p2a$adj_inc) | is.infinite(p2a$adj_inc)
+p2a <- p2a[!invalid_weights, ]
+
 
 p2a <- p2a %>% 
-  group_by(AGE_GROUP) %>% 
-  mutate(cuts = as.integer(cut(ewcdf(inc, weights=population)(inc), seq(0,1,.01))))
+  #group_by(AGE_GROUP) %>% 
+  mutate(cuts = as.integer(cut(ewcdf(adj_inc, weights=population)(adj_inc), seq(0,1,.01))))
 
-#p2a$cuts <- as.integer(cut(ecdf(p2a[,plotvar])(p2a[,plotvar]), seq(0,1,.01)))
-#p2a$cuts = as.integer(cut(ewcdf(p2a$inc, weights=p2a$population)(p2a$inc), seq(0,1,.01)))
-#p2a$cuts = as.integer(cut(ewcdf(p2a$inc)(p2a$inc), seq(0,1,.01)))
-  
+#p1a$cuts = as.integer(cut(ewcdf(p1a$inc, weights=p1a$population)(p1a$inc), seq(0,1,.01)))
+
 roundscale <- 1
-#quants <- weighted.quantile(p2a$inc, w=p2a$population, probs=seq(0,1,0.25), na.rm = TRUE)
-quants <- quantile(p2a$inc,  probs=seq(0,1,0.25), na.rm = TRUE)
+
+quants <- weighted.quantile(p2a$adj_inc, w=p2a$population, probs=seq(0,1,0.25), na.rm = TRUE)
 
 plotlabs <- c(as.character(''), 
                   rep('', 23),  
@@ -354,20 +480,20 @@ plotlabs <- c(as.character(''),
                   as.character(round(quants[4],roundscale)),
                   rep('', 24),  
                   as.character(''))
-  
-p2a %>% filter(AGE_GROUP %in% c("under 5", "5-9", "10-14",
-                                "60-64","65-69","70-74", "75-79",
-                                "80-84","85 above")) %>% 
+
+
+p2a %>% 
 ggplot() +
   geom_sf(aes(fill = cuts),color=NA) +
  # scale_fill_viridis_c(name = "Value") +
   theme_minimal() +
-  labs(title = "Florida ZIP Code Choropleth Map by age group (2015-2019)")+
+  labs(title = "Florida ZIP Code Choropleth Map (2016-2020)")+
     theme(panel.background = element_rect(color = "white", fill = "white")) +
     scale_fill_stepsn('Incidence rate', breaks= 1:100, limits = c(0,100), labels=plotlabs,
                       colors=inferno(20),
-                      guide = guide_colorsteps(even.steps = FALSE)) + 
-  facet_wrap(~AGE_GROUP)
+                      guide = guide_colorsteps(even.steps = FALSE)) #+ 
+  #facet_wrap(~AGE_GROUP)
+
   
 ```
 
